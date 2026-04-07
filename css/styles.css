@@ -25,6 +25,8 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow-x: hidden;
+  direction: ltr;
+  unicode-bidi: normal;
 }
 
 /* ── Circuit Grid Background ─────────────────────────────────── */
@@ -478,7 +480,7 @@ body {
   gap: 10px;
   padding: 5px 0;
   border-bottom: 1px solid rgba(255,255,255,0.05);
-  font-size: 0.72rem;
+  font-size: 0.92rem;
 }
 .data-row:last-child { border-bottom: none; }
 .dr-key {
@@ -490,10 +492,17 @@ body {
 .dr-val {
   font-family: 'Space Grotesk', sans-serif;
   color: rgba(229,229,229,0.6);
-  font-size: 0.78rem;
+  font-size: 1rem;
 }
 
 /* ── Bullet list item ───────────────────────────────────────── */
+/* Force LTR on all bullet/text content — something (likely Spline or a CDN style)
+   is injecting direction:rtl which scrambles inline text with <span> highlights */
+li, p, h1, h2, h3 {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
 .exp-bullet {
   width: 16px; height: 16px;
   border: 1px solid rgba(255,255,255,0.3);
@@ -656,8 +665,8 @@ section:not(#hero), footer {
 #mobile-menu { transition: max-height 0.3s ease, opacity 0.3s ease; }
 
 /* ── Text highlights ────────────────────────────────────────── */
-.hl  { color: var(--cyan);   font-weight: 600; }
-.hlp { color: var(--purple); font-weight: 600; }
+.hl  { color: var(--gold);   font-weight: 600; }
+.hlp { color: #60A5FA;       font-weight: 600; }
 .hlg { color: var(--green);  font-weight: 600; }
 
 /* ── Publication accent ─────────────────────────────────────── */

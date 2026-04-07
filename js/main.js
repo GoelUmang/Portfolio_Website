@@ -9,7 +9,10 @@ import { initShaderLoader } from './shaderLoader.js';
   const lines   = ['bl0', 'bl1', 'bl2', 'bl3', 'bl4'];
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  if (REDUCED || sessionStorage.getItem('booted')) {
+  const navType = performance.getEntriesByType('navigation')[0]?.type;
+  const isReload = navType === 'reload' || navType === 'back_forward';
+
+  if (REDUCED || sessionStorage.getItem('booted') || isReload) {
     boot.style.display = 'none';
     startSite();
     return;
