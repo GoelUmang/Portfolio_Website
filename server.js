@@ -13,23 +13,25 @@ const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
 // ── Security headers (helmet) ────────────────────────────────────────────────
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.tailwindcss.com', 'https://cdn.jsdelivr.net'],
-      styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-      fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc:         ["'self'", 'data:', 'blob:'],
-      connectSrc:     ["'self'", 'https://cdn.jsdelivr.net'],
-      workerSrc:      ["'self'", 'blob:'],
-      frameSrc:       ["'none'"],
-      objectSrc:      ["'none'"],
-      upgradeInsecureRequests: isProd ? [] : null,
+if (isProd) {
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc:     ["'self'"],
+        scriptSrc:      ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.tailwindcss.com', 'https://cdn.jsdelivr.net', 'https://esm.sh'],
+        styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc:         ["'self'", 'data:', 'blob:', 'https://prod.spline.design'],
+        connectSrc:     ["'self'", 'https://cdn.jsdelivr.net', 'https://esm.sh', 'https://prod.spline.design'],
+        workerSrc:      ["'self'", 'blob:', 'https://esm.sh'],
+        frameSrc:       ["'none'"],
+        objectSrc:      ["'none'"],
+        upgradeInsecureRequests: [],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: false, // allow fonts/cdn
-}));
+    crossOriginEmbedderPolicy: false,
+  }));
+}
 
 // ── Compression ──────────────────────────────────────────────────────────────
 app.use(compression());
@@ -174,7 +176,7 @@ app.use((err, _req, res, _next) => {
 });
 
 // ── Start ────────────────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   log('info', `Portfolio server running → http://localhost:${PORT} [${isProd ? 'production' : 'development'}]`);
 });
 

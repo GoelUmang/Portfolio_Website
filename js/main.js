@@ -9,10 +9,7 @@ import { initShaderLoader } from './shaderLoader.js';
   const lines   = ['bl0', 'bl1', 'bl2', 'bl3', 'bl4'];
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const navType = performance.getEntriesByType('navigation')[0]?.type;
-  const isReload = navType === 'reload' || navType === 'back_forward';
-
-  if (REDUCED || sessionStorage.getItem('booted') || isReload) {
+  if (REDUCED) {
     boot.style.display = 'none';
     startSite();
     return;
@@ -35,7 +32,6 @@ import { initShaderLoader } from './shaderLoader.js';
     boot.classList.add('fade-out');
     setTimeout(() => {
       boot.style.display = 'none';
-      sessionStorage.setItem('booted', '1');
       // Clean up WebGL resources after the boot screen is gone
       if (destroyShader) destroyShader();
       startSite();
