@@ -10,7 +10,7 @@
   --gold:       #C8A84B;           /* warm gold — warm complement    */
   --purple:     #9CA3AF;           /* silver-gray — neutral third    */
   --green:      #34D399;           /* keep for semantic status dots  */
-  --bg:         #0A0A0A;           /* near-black                     */
+  --bg:         #000000;           /* pitch black                    */
   --card:       #141414;           /* lifted card surface            */
   --border:     rgba(255,255,255,0.07);
   --text:       #E5E5E5;           /* off-white body text            */
@@ -619,8 +619,21 @@ body {
 
 #spline-canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Sections after hero sit above the fixed canvas */
+#about, #experience, #projects, #currently, #contact,
+section:not(#hero), footer {
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
 }
 
 @keyframes spinnerRing {

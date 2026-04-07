@@ -199,6 +199,44 @@
   <section id="hero" class="relative min-h-screen flex items-center pt-24 pb-16 px-4 overflow-hidden">
     <canvas id="hero-canvas"></canvas>
 
+    <!-- Full-screen Spline scene (fixed behind all content) -->
+    <svg class="animate-spotlight pointer-events-none fixed z-0 opacity-0"
+         style="height:169%;width:138%;top:-40%;left:-15%;"
+         xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3787 2842" fill="none" aria-hidden="true">
+      <g filter="url(#im-filter)">
+        <ellipse cx="1924.71" cy="273.501" rx="1924.71" ry="273.501"
+          transform="matrix(-0.822377 -0.568943 -0.568943 0.822377 3631.88 2291.09)"
+          fill="white" fill-opacity="0.21"/>
+      </g>
+      <defs>
+        <filter id="im-filter" x="0.860352" y="0.838989" width="3785.16" height="2840.26"
+          filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+          <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+          <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+          <feGaussianBlur stdDeviation="151" result="effect1_foregroundBlur_1065_8"/>
+        </filter>
+      </defs>
+    </svg>
+    <div id="hero-mouse-light"
+         class="pointer-events-none fixed inset-0 z-0 opacity-0"
+         style="background:radial-gradient(400px circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,0.07), transparent 70%);
+                transition:opacity 0.3s ease;">
+    </div>
+    <canvas id="spline-canvas" aria-hidden="true" tabindex="-1"></canvas>
+    <div id="spline-loader" class="fixed inset-0 z-0 flex items-center justify-center pointer-events-none">
+      <div style="text-align:center;">
+        <div class="spline-spinner" aria-label="Loading 3D scene"></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+                    letter-spacing:0.1em; color:rgba(255,255,255,0.5); margin-top:12px;">
+          LOADING_3D...
+        </div>
+      </div>
+    </div>
+    <div id="spline-hud" class="fixed bottom-4 left-4 z-0 pointer-events-none" aria-hidden="true"
+         style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+                letter-spacing:0.12em; color:rgba(255,255,255,0.18);">
+      MARK_85 // INTERACTIVE_3D
+    </div>
 
     <!-- Ambient orbs -->
     <div class="orb parallax-layer w-96 h-96" data-parallax="0.4" style="background:rgba(120,100,60,0.1); top:-40px; left:-80px;"></div>
@@ -289,7 +327,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
               </svg>
             </a>
-            <a href="https://www.linkedin.com/in/umang-goel/" target="_blank" rel="noopener" aria-label="LinkedIn"
+            <a href="https://www.linkedin.com/in/GoelUmang/" target="_blank" rel="noopener" aria-label="LinkedIn"
                class="social-icon w-10 h-10 flex items-center justify-center cursor-pointer">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
@@ -305,67 +343,6 @@
           </div>
         </div>
 
-        <!-- Right: Interactive 3D Scene -->
-        <div id="hero-3d-card" class="hidden lg:block relative rounded-2xl overflow-hidden flex-shrink-0"
-             style="width:480px; min-height:580px;
-                    background:rgba(0,0,0,0.96);
-                    border:1px solid rgba(255,255,255,0.15);
-                    box-shadow:0 0 60px rgba(255,255,255,0.04), inset 0 0 60px rgba(0,0,0,0.6);">
-
-          <!-- Corner accents -->
-          <span style="position:absolute;top:0;right:0;width:14px;height:14px;border-top:1px solid rgba(255,255,255,0.5);border-right:1px solid rgba(255,255,255,0.5);z-index:40;"></span>
-          <span style="position:absolute;bottom:0;left:0;width:14px;height:14px;border-bottom:1px solid rgba(255,255,255,0.5);border-left:1px solid rgba(255,255,255,0.5);z-index:40;"></span>
-
-          <!-- Aceternity animated SVG spotlight -->
-          <svg class="animate-spotlight pointer-events-none absolute z-10 opacity-0"
-               style="height:169%;width:138%;top:-40%;left:-15%;"
-               xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3787 2842" fill="none" aria-hidden="true">
-            <g filter="url(#im-filter)">
-              <ellipse cx="1924.71" cy="273.501" rx="1924.71" ry="273.501"
-                transform="matrix(-0.822377 -0.568943 -0.568943 0.822377 3631.88 2291.09)"
-                fill="white" fill-opacity="0.21"/>
-            </g>
-            <defs>
-              <filter id="im-filter" x="0.860352" y="0.838989" width="3785.16" height="2840.26"
-                filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-                <feFlood flood-opacity="0" result="BackgroundImageFix"/>
-                <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
-                <feGaussianBlur stdDeviation="151" result="effect1_foregroundBlur_1065_8"/>
-              </filter>
-            </defs>
-          </svg>
-
-          <!-- Mouse-tracking radial glow -->
-          <div id="hero-mouse-light"
-               class="pointer-events-none absolute inset-0 z-20 rounded-2xl opacity-0"
-               style="background:radial-gradient(280px circle at var(--mx,50%) var(--my,50%), rgba(255,255,255,0.10), transparent 70%);
-                      transition:opacity 0.3s ease;">
-          </div>
-
-          <!-- Spline canvas -->
-          <canvas id="spline-canvas"
-                  class="absolute inset-0 w-full h-full"
-                  style="z-index:5;"
-                  aria-hidden="true" tabindex="-1"></canvas>
-
-          <!-- HUD label -->
-          <div class="absolute bottom-4 left-4 z-30 pointer-events-none" aria-hidden="true"
-               style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
-                      letter-spacing:0.12em; color:rgba(255,255,255,0.18);">
-            MARK_85 // INTERACTIVE_3D
-          </div>
-          <!-- HUD loading indicator (hidden once scene loads) -->
-          <div id="spline-loader" class="absolute inset-0 z-30 flex items-center justify-center"
-               style="background:rgba(0,0,0,0.7);">
-            <div style="text-align:center;">
-              <div class="spline-spinner" aria-label="Loading 3D scene"></div>
-              <div style="font-family:'JetBrains Mono',monospace; font-size:0.6rem;
-                          letter-spacing:0.1em; color:rgba(255,255,255,0.5); margin-top:12px;">
-                LOADING_3D...
-              </div>
-            </div>
-          </div>
-        </div>
 
       </div>
 
@@ -1059,7 +1036,7 @@
             <p class="text-xs font-mono break-all" style="color:rgba(229,229,229,0.65);">goelumangjob@gmail.com</p>
           </a>
 
-          <a href="https://www.linkedin.com/in/umang-goel/" target="_blank" rel="noopener" class="contact-card p-5 cursor-pointer">
+          <a href="https://www.linkedin.com/in/GoelUmang/" target="_blank" rel="noopener" class="contact-card p-5 cursor-pointer">
             <div class="w-10 h-10 flex items-center justify-center mx-auto mb-3"
                  style="border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); border-radius:2px;">
               <svg class="w-5 h-5" style="color:var(--cyan);" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -1067,7 +1044,9 @@
               </svg>
             </div>
             <p class="sys-label mb-1">LinkedIn</p>
-            <p class="text-xs font-mono" style="color:rgba(229,229,229,0.65);">linkedin.com/in/umang-goel</p>
+            <p class="text-xs font-mono" style="color:rgba(229,229,229,0.65);"><linkedin class="com">
+            <in>
+            <goelumang></goelumang></p>
           </a>
 
           <a href="tel:6232868901" class="contact-card p-5 cursor-pointer">
@@ -1155,7 +1134,7 @@
       </div>
       <div class="flex items-center gap-4">
         <a href="mailto:goelumangjob@gmail.com" class="hover:text-[var(--cyan)] transition-colors cursor-pointer">EMAIL</a>
-        <a href="https://www.linkedin.com/in/umang-goel/" target="_blank" rel="noopener" class="hover:text-[var(--cyan)] transition-colors cursor-pointer">LINKEDIN</a>
+        <a href="https://www.linkedin.com/in/GoelUmang/" target="_blank" rel="noopener" class="hover:text-[var(--cyan)] transition-colors cursor-pointer">LINKEDIN</a>
         <a href="https://github.com/umanggoel" target="_blank" rel="noopener" class="hover:text-[var(--cyan)] transition-colors cursor-pointer">GITHUB</a>
         <span style="color:rgba(255,255,255,0.12);">·</span>
         <span>ASU_CS · MAY_2026</span>
