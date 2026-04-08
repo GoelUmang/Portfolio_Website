@@ -150,7 +150,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
 
   const mailOptions = {
     from:    `"Portfolio Contact" <${process.env.SMTP_USER}>`,
-    to:      process.env.CONTACT_TO || 'goelumangjob@gmail.com',
+    to:      process.env.CONTACT_TO || 'goelumangcareers@gmail.com',
     replyTo: email,
     subject: subject ? `[Portfolio] ${subject}` : `[Portfolio] New message from ${name}`,
     text:    `Name: ${name}\nEmail: ${email}\n\n${message}`,

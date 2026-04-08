@@ -2,21 +2,28 @@ import './contact.js';
 import { initSplineScene }  from './splineScene.js';
 import { initShaderLoader } from './shaderLoader.js';
 
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 // ── Boot Sequence ────────────────────────────────────────────────────────────
 (function () {
-  const boot    = document.getElementById('boot-screen');
-  const bar     = document.getElementById('boot-bar');
-  const lines   = ['bl0', 'bl1', 'bl2', 'bl3', 'bl4'];
-  const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const boot  = document.getElementById('boot-screen');
+  const bar   = document.getElementById('boot-bar');
+  const lines = ['bl0', 'bl1', 'bl2', 'bl3', 'bl4'];
 
-  if (REDUCED) {
+  // Skip boot for returning visitors or reduced-motion preference
+  if (REDUCED_MOTION || sessionStorage.getItem('booted')) {
     boot.style.display = 'none';
     startSite();
     return;
   }
 
-  // Start the shader animation behind the boot content
-  const destroyShader = initShaderLoader();
+  // Wrap shader init in try/catch — if WebGL unavailable, boot still finishes
+  let destroyShader;
+  try {
+    destroyShader = initShaderLoader();
+  } catch (err) {
+    console.warn('[Boot] Shader failed to load:', err);
+  }
 
   let i = 0;
   function showNextLine() {
@@ -32,7 +39,7 @@ import { initShaderLoader } from './shaderLoader.js';
     boot.classList.add('fade-out');
     setTimeout(() => {
       boot.style.display = 'none';
-      // Clean up WebGL resources after the boot screen is gone
+      sessionStorage.setItem('booted', '1');
       if (destroyShader) destroyShader();
       startSite();
     }, 650);
@@ -42,7 +49,8 @@ import { initShaderLoader } from './shaderLoader.js';
 // ── Typewriter ───────────────────────────────────────────────────────────────
 function startSite() {
   const roleEl = document.getElementById('hero-role');
-  const roles  = ['Software Engineer', 'Systems Developer', 'Backend Engineer'];
+  if (!roleEl) return;
+  const roles = ['Software Engineer', 'Systems Developer', 'Backend Engineer'];
   let ri = 0, ci = 0, deleting = false;
 
   function typeStep() {
@@ -59,77 +67,94 @@ function startSite() {
   setTimeout(typeStep, 300);
 }
 
-// ── Scroll Progress Bar ──────────────────────────────────────────────────────
+// ── Unified rAF-throttled scroll handler ─────────────────────────────────────
+// All scroll-dependent updates run in one listener to avoid layout thrashing.
 const progressBar = document.getElementById('scroll-progress');
-function updateProgress() {
-  const scrolled = window.scrollY;
-  const total    = document.documentElement.scrollHeight - window.innerHeight;
-  progressBar.style.width = total > 0 ? (scrolled / total * 100) + '%' : '0%';
+const navInner    = document.getElementById('nav-inner');
+const parallaxEls = document.querySelectorAll('[data-parallax]');
+let scrollRafId   = null;
+
+function onScrollFrame() {
+  const scrollY = window.scrollY;
+  const total   = document.documentElement.scrollHeight - window.innerHeight;
+
+  // Progress bar
+  if (progressBar) progressBar.style.width = total > 0 ? (scrollY / total * 100) + '%' : '0%';
+
+  // Navbar glow
+  if (navInner) {
+    navInner.style.boxShadow = scrollY > 60
+      ? '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)'
+      : 'none';
+  }
+
+  // Parallax
+  if (!REDUCED_MOTION) {
+    parallaxEls.forEach(el => {
+      const speed = parseFloat(el.dataset.parallax) || 0.2;
+      el.style.transform = `translateY(${scrollY * speed}px)`;
+    });
+  }
+
+  scrollRafId = null;
 }
-window.addEventListener('scroll', updateProgress, { passive: true });
+
+window.addEventListener('scroll', () => {
+  if (!scrollRafId) scrollRafId = requestAnimationFrame(onScrollFrame);
+}, { passive: true });
+
+// Run once on load to initialise values
+onScrollFrame();
 
 // ── Apple-style Scroll Reveal ────────────────────────────────────────────────
-// Handles .reveal, .reveal-left, .reveal-scale — all with spring easing via CSS
-const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-const revealSelectors = '.reveal, .reveal-left, .reveal-scale';
 const revealObs = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
       e.target.classList.add('visible');
-      revealObs.unobserve(e.target); // fire once
+      revealObs.unobserve(e.target);
     }
   });
 }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
 
-document.querySelectorAll(revealSelectors).forEach(el => {
+document.querySelectorAll('.reveal, .reveal-left, .reveal-scale').forEach(el => {
   if (REDUCED_MOTION) { el.classList.add('visible'); return; }
   revealObs.observe(el);
 });
 
-// ── Parallax ─────────────────────────────────────────────────────────────────
-// data-parallax="0.3" → element moves 30% of scroll speed (slower = depth)
-const parallaxEls = document.querySelectorAll('[data-parallax]');
-
-function applyParallax() {
-  const scrollY = window.scrollY;
-  parallaxEls.forEach(el => {
-    const speed = parseFloat(el.dataset.parallax) || 0.2;
-    el.style.transform = `translateY(${scrollY * speed}px)`;
-  });
-}
-
-if (!REDUCED_MOTION && parallaxEls.length) {
-  window.addEventListener('scroll', applyParallax, { passive: true });
-}
-
-// ── Particle Network Canvas ──────────────────────────────────────────────────
-const canvas = document.getElementById('hero-canvas');
-const ctx    = canvas.getContext('2d');
+// ── Particle Network Canvas ───────────────────────────────────────────────────
+const heroCanvas = document.getElementById('hero-canvas');
+const ctx        = heroCanvas?.getContext('2d');
 let particles = [], rafId;
 
 function resizeCanvas() {
-  const hero    = document.getElementById('hero');
-  canvas.width  = hero.offsetWidth;
-  canvas.height = hero.offsetHeight;
+  const hero = document.getElementById('hero');
+  if (!hero || !heroCanvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w   = hero.offsetWidth;
+  const h   = hero.offsetHeight;
+  heroCanvas.width  = w * dpr;
+  heroCanvas.height = h * dpr;
+  heroCanvas.style.width  = w + 'px';
+  heroCanvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
 }
 
 class Particle {
   constructor() { this.reset(true); }
   reset(init) {
-    this.x  = Math.random() * canvas.width;
-    const edgeY = Math.random() > 0.5 ? 0 : canvas.height;
-    this.y  = init ? Math.random() * canvas.height : edgeY;
+    const w = heroCanvas.offsetWidth, h = heroCanvas.offsetHeight;
+    this.x  = Math.random() * w;
+    const edgeY = Math.random() > 0.5 ? 0 : h;
+    this.y  = init ? Math.random() * h : edgeY;
     this.vx = (Math.random() - 0.5) * 0.35;
     this.vy = (Math.random() - 0.5) * 0.35;
     this.r  = Math.random() * 1.2 + 0.4;
     this.a  = Math.random() * 0.35 + 0.08;
   }
   update() {
+    const w = heroCanvas.offsetWidth, h = heroCanvas.offsetHeight;
     this.x += this.vx; this.y += this.vy;
-    if (this.x < -10 || this.x > canvas.width + 10 || this.y < -10 || this.y > canvas.height + 10) {
-      this.reset(false);
-    }
+    if (this.x < -10 || this.x > w + 10 || this.y < -10 || this.y > h + 10) this.reset(false);
   }
   draw() {
     ctx.beginPath();
@@ -141,8 +166,8 @@ class Particle {
 
 function initParticles() {
   particles = [];
-  if (REDUCED_MOTION) return;
-  const n = Math.min(Math.floor((canvas.width * canvas.height) / 13000), 90);
+  if (REDUCED_MOTION || !heroCanvas) return;
+  const n = Math.min(Math.floor((heroCanvas.offsetWidth * heroCanvas.offsetHeight) / 13000), 90);
   for (let i = 0; i < n; i++) particles.push(new Particle());
 }
 
@@ -166,26 +191,27 @@ function drawLines() {
 }
 
 function animate() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, heroCanvas.offsetWidth, heroCanvas.offsetHeight);
   particles.forEach(p => { p.update(); p.draw(); });
   drawLines();
   rafId = requestAnimationFrame(animate);
 }
 
-const heroSection = document.getElementById('hero');
-new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) { if (!rafId) animate(); }
-    else { cancelAnimationFrame(rafId); rafId = null; }
-  });
-}).observe(heroSection);
+if (heroCanvas) {
+  new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { if (!rafId) animate(); }
+      else { cancelAnimationFrame(rafId); rafId = null; }
+    });
+  }).observe(heroCanvas.closest('#hero') || heroCanvas);
 
-window.addEventListener('resize', () => { resizeCanvas(); initParticles(); }, { passive: true });
-resizeCanvas();
-initParticles();
-if (!REDUCED_MOTION) animate();
+  window.addEventListener('resize', () => { resizeCanvas(); initParticles(); }, { passive: true });
+  resizeCanvas();
+  initParticles();
+  if (!REDUCED_MOTION) animate();
+}
 
-// ── Active nav on scroll ─────────────────────────────────────────────────────
+// ── Active nav on scroll ──────────────────────────────────────────────────────
 const navLinks   = document.querySelectorAll('.nav-link');
 const sectionObs = new IntersectionObserver(entries => {
   entries.forEach(e => {
@@ -200,42 +226,36 @@ const sectionObs = new IntersectionObserver(entries => {
 }, { threshold: 0.35 });
 document.querySelectorAll('section[id]').forEach(s => sectionObs.observe(s));
 
-// ── Mobile menu ──────────────────────────────────────────────────────────────
+// ── Mobile menu ───────────────────────────────────────────────────────────────
 const menuToggle = document.getElementById('menu-toggle');
 const mobileMenu = document.getElementById('mobile-menu');
 let menuOpen = false;
 
 function closeMobileMenu() {
   menuOpen = false;
-  menuToggle.setAttribute('aria-expanded', 'false');
-  mobileMenu.style.maxHeight = '0';
-  mobileMenu.style.opacity   = '0';
+  menuToggle?.setAttribute('aria-expanded', 'false');
+  if (mobileMenu) { mobileMenu.style.maxHeight = '0'; mobileMenu.style.opacity = '0'; }
 }
 
-menuToggle.addEventListener('click', () => {
-  menuOpen = !menuOpen;
-  menuToggle.setAttribute('aria-expanded', menuOpen);
-  mobileMenu.style.maxHeight = menuOpen ? '400px' : '0';
-  mobileMenu.style.opacity   = menuOpen ? '1'     : '0';
-});
+if (menuToggle && mobileMenu) {
+  menuToggle.addEventListener('click', () => {
+    menuOpen = !menuOpen;
+    menuToggle.setAttribute('aria-expanded', String(menuOpen));
+    mobileMenu.style.maxHeight = menuOpen ? '400px' : '0';
+    mobileMenu.style.opacity   = menuOpen ? '1'     : '0';
+  });
 
-document.addEventListener('click', e => {
-  if (menuOpen && !menuToggle.contains(e.target) && !mobileMenu.contains(e.target)) closeMobileMenu();
-});
+  // Close on outside click — attached once, not repeatedly
+  document.addEventListener('click', e => {
+    if (menuOpen && !menuToggle.contains(e.target) && !mobileMenu.contains(e.target)) closeMobileMenu();
+  });
 
-document.querySelectorAll('#mobile-menu .nav-link').forEach(link => {
-  link.addEventListener('click', closeMobileMenu);
-});
+  document.querySelectorAll('#mobile-menu .nav-link').forEach(link => {
+    link.addEventListener('click', closeMobileMenu);
+  });
+}
 
-// ── Navbar glow on scroll ────────────────────────────────────────────────────
-window.addEventListener('scroll', () => {
-  const inner = document.getElementById('nav-inner');
-  inner.style.boxShadow = window.scrollY > 60
-    ? '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)'
-    : 'none';
-}, { passive: true });
-
-// ── Stat counters ────────────────────────────────────────────────────────────
+// ── Stat counters ─────────────────────────────────────────────────────────────
 function animCounter(el, target, suffix, dec) {
   if (REDUCED_MOTION) { el.textContent = (dec > 0 ? target.toFixed(dec) : target) + suffix; return; }
   const dur = 1800, t0 = performance.now();
@@ -249,12 +269,11 @@ function animCounter(el, target, suffix, dec) {
   })(t0);
 }
 
-let counted   = false;
 const statEls = document.querySelectorAll('.stat-num');
+// Re-animate every time the stat row comes into view (removed single-fire flag)
 new IntersectionObserver(entries => {
   entries.forEach(e => {
-    if (e.isIntersecting && !counted) {
-      counted = true;
+    if (e.isIntersecting) {
       statEls.forEach(el => animCounter(
         el,
         parseFloat(el.dataset.target),
@@ -265,7 +284,7 @@ new IntersectionObserver(entries => {
   });
 }, { threshold: 0.5 }).observe(statEls[0]?.closest('.hud-card') || document.body);
 
-// ── Glitch on heading hover ──────────────────────────────────────────────────
+// ── Glitch on heading hover ───────────────────────────────────────────────────
 if (!REDUCED_MOTION) {
   document.querySelectorAll('h1, h2, h3').forEach(el => {
     el.addEventListener('mouseenter', () => {
@@ -275,40 +294,45 @@ if (!REDUCED_MOTION) {
   });
 }
 
-// ── Magnetic button effect ───────────────────────────────────────────────────
-// Buttons gently follow cursor within their bounds (Apple-style interaction)
+// ── Magnetic button effect ────────────────────────────────────────────────────
+// Cache rect on mouseenter; only read layout once per hover, not every mousemove
 if (!REDUCED_MOTION) {
   document.querySelectorAll('.btn-primary, .btn-outline').forEach(btn => {
+    let rect;
+    btn.addEventListener('mouseenter', () => { rect = btn.getBoundingClientRect(); });
     btn.addEventListener('mousemove', e => {
-      const rect   = btn.getBoundingClientRect();
-      const cx     = rect.left + rect.width  / 2;
-      const cy     = rect.top  + rect.height / 2;
-      const dx     = (e.clientX - cx) / (rect.width  / 2);
-      const dy     = (e.clientY - cy) / (rect.height / 2);
-      const strength = 5; // px max offset
-      btn.style.transform = `translate(${dx * strength}px, ${dy * strength}px)`;
+      if (!rect) return;
+      const cx = rect.left + rect.width  / 2;
+      const cy = rect.top  + rect.height / 2;
+      const dx = (e.clientX - cx) / (rect.width  / 2);
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      btn.style.transform = `translate(${dx * 5}px, ${dy * 5}px)`;
     });
     btn.addEventListener('mouseleave', () => {
-      btn.style.transform = '';
+      rect = null;
+      btn.style.transform  = '';
       btn.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
       setTimeout(() => { btn.style.transition = ''; }, 400);
     });
   });
 }
 
-// ── Tilt effect on hud-cards ─────────────────────────────────────────────────
-// Subtle 3-D tilt as cursor moves over a card (Apple Vision Pro feel)
+// ── Tilt effect on hud-cards ──────────────────────────────────────────────────
+// Cache rect on mouseenter; only read layout once per hover, not every mousemove
 if (!REDUCED_MOTION && window.matchMedia('(hover: hover)').matches) {
   document.querySelectorAll('.hud-card').forEach(card => {
+    let rect;
+    card.addEventListener('mouseenter', () => { rect = card.getBoundingClientRect(); });
     card.addEventListener('mousemove', e => {
-      const rect  = card.getBoundingClientRect();
-      const x     = (e.clientX - rect.left) / rect.width  - 0.5; // -0.5 → 0.5
+      if (!rect) return;
+      const x     = (e.clientX - rect.left) / rect.width  - 0.5;
       const y     = (e.clientY - rect.top)  / rect.height - 0.5;
-      const tiltX =  y * 6;  // degrees
+      const tiltX =  y * 6;
       const tiltY = -x * 6;
       card.style.transform = `perspective(600px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-3px)`;
     });
     card.addEventListener('mouseleave', () => {
+      rect = null;
       card.style.transition = 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease';
       card.style.transform  = '';
       setTimeout(() => { card.style.transition = ''; }, 500);
@@ -316,26 +340,23 @@ if (!REDUCED_MOTION && window.matchMedia('(hover: hover)').matches) {
   });
 }
 
-// ── Reduced motion fallback ──────────────────────────────────────────────────
+// ── Reduced motion fallback ───────────────────────────────────────────────────
 if (REDUCED_MOTION) {
   document.querySelectorAll('.reveal, .reveal-left, .reveal-scale').forEach(el => el.classList.add('visible'));
   document.querySelectorAll('.btn-star-light').forEach(el => { el.style.animation = 'none'; });
 }
 
-// ── Star button offset-path initialization ───────────────────────────────────
+// ── Star button offset-path ───────────────────────────────────────────────────
 function initStarButtons() {
   document.querySelectorAll('.btn-primary, .btn-outline').forEach(btn => {
     const light = btn.querySelector('.btn-star-light');
     if (!light) return;
     const w = btn.offsetWidth;
     const h = btn.offsetHeight;
-    // Rectangular path matching button dimensions; border-radius clips the visuals
     light.style.offsetPath     = `path('M 0 0 H ${w} V ${h} H 0 Z')`;
     light.style.offsetDistance = '0%';
   });
 }
-
-// Run once layout is stable, then re-run on resize
 requestAnimationFrame(() => { requestAnimationFrame(initStarButtons); });
 let _starResizeTimer;
 window.addEventListener('resize', () => {
@@ -343,7 +364,7 @@ window.addEventListener('resize', () => {
   _starResizeTimer = setTimeout(initStarButtons, 150);
 }, { passive: true });
 
-// ── Interactive 3D scene ─────────────────────────────────────────────────────
+// ── Interactive 3D scene ──────────────────────────────────────────────────────
 initSplineScene();
 
 // ── Phone number — rendered via JS to avoid plain-text scraping ───────────────
@@ -351,14 +372,12 @@ initSplineScene();
   const parts = ['623', '286', '8901'];
   const num   = parts.join('-');
   const tel   = 'tel:' + parts.join('');
-  // Hero section
   const link  = document.getElementById('phone-link');
   const label = document.getElementById('phone-display');
-  if (link)  { link.href = tel; }
-  if (label) { label.textContent = num; }
-  // Contact section
+  if (link)  link.href = tel;
+  if (label) label.textContent = num;
   const cLink  = document.getElementById('contact-phone-link');
   const cLabel = document.getElementById('contact-phone-display');
-  if (cLink)  { cLink.href = tel; }
-  if (cLabel) { cLabel.textContent = num; }
+  if (cLink)  cLink.href = tel;
+  if (cLabel) cLabel.textContent = num;
 })();

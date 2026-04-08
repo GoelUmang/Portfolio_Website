@@ -22,16 +22,24 @@ form.addEventListener('submit', async function (e) {
     return;
   }
 
-  submit.disabled      = true;
-  btnText.textContent  = 'Transmitting…';
+  submit.disabled        = true;
+  btnText.textContent    = 'Transmitting…';
   statusEl.style.display = 'none';
 
   try {
+    // Fetch a single-use CSRF token before submitting
+    const csrfRes = await fetch('/api/csrf-token');
+    if (!csrfRes.ok) throw new Error('Failed to initialise session');
+    const { token } = await csrfRes.json();
+
     const website = document.getElementById('website')?.value ?? '';
-    const res  = await fetch('/api/contact', {
+    const res = await fetch('/api/contact', {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ name, email, subject, message, website }),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-csrf-token': token,
+      },
+      body: JSON.stringify({ name, email, subject, message, website }),
     });
     const data = await res.json();
 
