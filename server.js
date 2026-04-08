@@ -6,32 +6,34 @@ const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
 const compression = require('compression');
 const nodemailer  = require('nodemailer');
+const crypto      = require('crypto');
 const path        = require('path');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
+// ── Public directory ─────────────────────────────────────────────────────────
+const PUBLIC_DIR = path.join(__dirname, 'public');
+
 // ── Security headers (helmet) ────────────────────────────────────────────────
-if (isProd) {
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc:     ["'self'"],
-        scriptSrc:      ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.tailwindcss.com', 'https://cdn.jsdelivr.net', 'https://esm.sh'],
-        styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-        fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
-        imgSrc:         ["'self'", 'data:', 'blob:', 'https://prod.spline.design'],
-        connectSrc:     ["'self'", 'https://cdn.jsdelivr.net', 'https://esm.sh', 'https://prod.spline.design'],
-        workerSrc:      ["'self'", 'blob:', 'https://esm.sh'],
-        frameSrc:       ["'none'"],
-        objectSrc:      ["'none'"],
-        upgradeInsecureRequests: [],
-      },
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'", "'unsafe-inline'", 'https://esm.sh'],
+      styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc:         ["'self'", 'data:', 'blob:', 'https://prod.spline.design'],
+      connectSrc:     ["'self'", 'https://cdn.jsdelivr.net', 'https://esm.sh', 'https://prod.spline.design'],
+      workerSrc:      ["'self'", 'blob:', 'https://esm.sh'],
+      frameSrc:       ["'none'"],
+      objectSrc:      ["'none'"],
+      ...(isProd ? { upgradeInsecureRequests: [] } : {}),
     },
-    crossOriginEmbedderPolicy: false,
-  }));
-}
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // ── Compression ──────────────────────────────────────────────────────────────
 app.use(compression());
@@ -43,7 +45,6 @@ const allowedOrigins = isProd
 
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow same-origin requests (no Origin header) and allowed list
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     cb(new Error('Not allowed by CORS'));
   },
@@ -55,27 +56,37 @@ app.use(express.json({ limit: '10kb' }));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 const contactLimiter = rateLimit({
-  windowMs:         15 * 60 * 1000, // 15 minutes
-  max:              5,               // 5 submissions per window per IP
+  windowMs:         15 * 60 * 1000,
+  max:              5,
   standardHeaders:  true,
   legacyHeaders:    false,
   message: { error: 'Too many messages sent. Please wait 15 minutes and try again.' },
   skipSuccessfulRequests: false,
 });
 
-// ── Block sensitive files before static middleware ───────────────────────────
-const BLOCKED = /^\/(\.|node_modules|package(-lock)?\.json|server\.js)/i;
-app.use((req, res, next) => {
-  if (req.method === 'GET' && BLOCKED.test(req.path)) return res.status(403).end();
-  next();
+// ── CSRF token store (in-memory, single-use, 1-hour TTL) ────────────────────
+const csrfTokens = new Map(); // token → expiry (ms)
+
+function pruneExpiredTokens() {
+  const now = Date.now();
+  for (const [token, expiry] of csrfTokens) {
+    if (now > expiry) csrfTokens.delete(token);
+  }
+}
+
+app.get('/api/csrf-token', (_req, res) => {
+  pruneExpiredTokens();
+  const token = crypto.randomBytes(32).toString('hex');
+  csrfTokens.set(token, Date.now() + 60 * 60 * 1000); // 1 hour
+  res.json({ token });
 });
 
-// ── Static files — serve only from project root, block dotfiles ──────────────
-app.use(express.static(path.join(__dirname), {
-  dotfiles: 'deny',            // block .env, .gitignore etc.
+// ── Static files — served exclusively from public/ ───────────────────────────
+app.use(express.static(PUBLIC_DIR, {
+  dotfiles: 'deny',
   index:    'index.html',
   etag:     true,
-  maxAge:   isProd ? '1d' : 0, // cache assets in production
+  maxAge:   isProd ? '1d' : 0,
 }));
 
 // ── Health check ─────────────────────────────────────────────────────────────
@@ -96,6 +107,14 @@ const transporter = nodemailer.createTransport({
 
 // ── POST /api/contact ────────────────────────────────────────────────────────
 app.post('/api/contact', contactLimiter, async (req, res) => {
+  // CSRF verification
+  const csrfHeader = req.headers['x-csrf-token'];
+  const tokenExpiry = csrfTokens.get(csrfHeader);
+  if (!csrfHeader || !tokenExpiry || Date.now() > tokenExpiry) {
+    return res.status(403).json({ error: 'Invalid or expired session. Please refresh and try again.' });
+  }
+  csrfTokens.delete(csrfHeader); // single-use
+
   const { name, email, subject, message } = req.body ?? {};
 
   // Presence check
@@ -126,7 +145,6 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
 
   // Honeypot field — bots fill this, humans don't
   if (req.body.website) {
-    // Silently accept but don't send email
     return res.json({ success: true, message: 'Message sent successfully.' });
   }
 
@@ -138,7 +156,7 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     text:    `Name: ${name}\nEmail: ${email}\n\n${message}`,
     html: `
       <div style="font-family:sans-serif;max-width:600px;margin:auto;">
-        <h2 style="color:#00D4FF;border-bottom:1px solid #00D4FF;padding-bottom:8px;">
+        <h2 style="color:#C8A84B;border-bottom:1px solid #C8A84B;padding-bottom:8px;">
           New Portfolio Message
         </h2>
         <p><strong>Name:</strong> ${escapeHtml(name)}</p>
@@ -154,15 +172,14 @@ app.post('/api/contact', contactLimiter, async (req, res) => {
     await transporter.sendMail(mailOptions);
     return res.json({ success: true, message: 'Message sent successfully.' });
   } catch (err) {
-    // Never leak internal error details to client
     log('error', 'Email send error', err.message);
     return res.status(500).json({ error: 'Failed to send message. Please try again later.' });
   }
 });
 
-// ── Fallback → index.html (SPA) ──────────────────────────────────────────────
+// ── Fallback → index.html ────────────────────────────────────────────────────
 app.get('*', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 // ── Global error handler ─────────────────────────────────────────────────────
@@ -175,31 +192,36 @@ app.use((err, _req, res, _next) => {
   });
 });
 
-// ── Start ────────────────────────────────────────────────────────────────────
-const server = app.listen(PORT, '0.0.0.0', () => {
-  log('info', `Portfolio server running → http://localhost:${PORT} [${isProd ? 'production' : 'development'}]`);
-});
-
-server.on('error', err => {
-  if (err.code === 'EADDRINUSE') {
-    log('error', `Port ${PORT} is already in use. Run: lsof -ti :${PORT} | xargs kill -9`);
-    process.exit(1);
-  } else {
-    throw err;
-  }
-});
-
-// ── Graceful shutdown ────────────────────────────────────────────────────────
-function shutdown(signal) {
-  log('info', `${signal} received — shutting down gracefully`);
-  server.close(() => {
-    log('info', 'Server closed');
-    process.exit(0);
+// ── Start (skipped when imported by Vercel serverless) ───────────────────────
+if (require.main === module) {
+  const HOST = isProd ? '0.0.0.0' : '127.0.0.1';
+  const server = app.listen(PORT, HOST, () => {
+    log('info', `Portfolio server running → http://localhost:${PORT} [${isProd ? 'production' : 'development'}]`);
   });
-  setTimeout(() => process.exit(1), 10_000); // force-kill after 10s
+
+  server.on('error', err => {
+    if (err.code === 'EADDRINUSE') {
+      log('error', `Port ${PORT} is already in use. Run: lsof -ti :${PORT} | xargs kill -9`);
+      process.exit(1);
+    } else {
+      throw err;
+    }
+  });
+
+  // ── Graceful shutdown ──────────────────────────────────────────────────────
+  function shutdown(signal) {
+    log('info', `${signal} received — shutting down gracefully`);
+    server.close(() => {
+      log('info', 'Server closed');
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000);
+  }
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
 }
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT',  () => shutdown('SIGINT'));
+
+module.exports = app;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function escapeHtml(str) {
