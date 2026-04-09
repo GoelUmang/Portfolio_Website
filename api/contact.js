@@ -47,7 +47,11 @@ function isRateLimited(ip) {
 }
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
-const ALLOWED_ORIGINS = [process.env.ORIGIN].filter(Boolean);
+const ALLOWED_ORIGINS = [
+  process.env.ORIGIN,                        // primary: https://goelumang.com
+  'https://www.goelumang.com',               // www variant
+  'https://umang-goel.vercel.app',           // Vercel preview URL
+].filter(Boolean);
 
 function isOriginAllowed(origin) {
   if (!origin) return false;              // block requests with no Origin header

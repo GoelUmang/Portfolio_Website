@@ -41,7 +41,7 @@ app.use(compression());
 
 // ── CORS — same-origin only in production ────────────────────────────────────
 const allowedOrigins = isProd
-  ? [process.env.ORIGIN].filter(Boolean)
+  ? [process.env.ORIGIN, 'https://www.goelumang.com', 'https://umang-goel.vercel.app'].filter(Boolean)
   : ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 app.use(cors({
