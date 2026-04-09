@@ -6,10 +6,11 @@ const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
 const compression = require('compression');
 const nodemailer  = require('nodemailer');
-const crypto      = require('crypto');
 const path        = require('path');
 
 const app  = express();
+app.set('trust proxy', 1);
+
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -45,7 +46,11 @@ const allowedOrigins = isProd
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    if (!origin) {
+      // In production, block non-browser requests (missing origin header)
+      return isProd ? cb(new Error('Not allowed by CORS: Origin header missing')) : cb(null, true);
+    }
+    if (allowedOrigins.includes(origin)) return cb(null, true);
     cb(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST'],
@@ -54,7 +59,17 @@ app.use(cors({
 // ── Body parsing — cap at 10 KB ──────────────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
 
-// ── Rate limiting ─────────────────────────────────────────────────────────────
+// ── Global Rate limiting for DDoS protection ──────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs:         15 * 60 * 1000, // 15 minutes
+  max:              500, // Limit each IP to 500 requests per `window`
+  standardHeaders:  true,
+  legacyHeaders:    false,
+  message: { error: 'Too many requests from this IP, please try again later.' },
+});
+app.use(globalLimiter);
+
+// ── Contact Rate limiting ─────────────────────────────────────────────────────
 const contactLimiter = rateLimit({
   windowMs:         15 * 60 * 1000,
   max:              5,
@@ -64,22 +79,8 @@ const contactLimiter = rateLimit({
   skipSuccessfulRequests: false,
 });
 
-// ── CSRF token store (in-memory, single-use, 1-hour TTL) ────────────────────
-const csrfTokens = new Map(); // token → expiry (ms)
-
-function pruneExpiredTokens() {
-  const now = Date.now();
-  for (const [token, expiry] of csrfTokens) {
-    if (now > expiry) csrfTokens.delete(token);
-  }
-}
-
-app.get('/api/csrf-token', (_req, res) => {
-  pruneExpiredTokens();
-  const token = crypto.randomBytes(32).toString('hex');
-  csrfTokens.set(token, Date.now() + 60 * 60 * 1000); // 1 hour
-  res.json({ token });
-});
+// CSRF Token functionality has been removed because it is incompatible with 
+// unauthenticated public endpoints and serverless memory environments.
 
 // ── Static files — served exclusively from public/ ───────────────────────────
 app.use(express.static(PUBLIC_DIR, {
@@ -105,16 +106,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ── POST /api/contact ────────────────────────────────────────────────────────
 app.post('/api/contact', contactLimiter, async (req, res) => {
-  // CSRF verification
-  const csrfHeader = req.headers['x-csrf-token'];
-  const tokenExpiry = csrfTokens.get(csrfHeader);
-  if (!csrfHeader || !tokenExpiry || Date.now() > tokenExpiry) {
-    return res.status(403).json({ error: 'Invalid or expired session. Please refresh and try again.' });
-  }
-  csrfTokens.delete(csrfHeader); // single-use
-
   const { name, email, subject, message } = req.body ?? {};
 
   // Presence check
