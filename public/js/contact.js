@@ -9,13 +9,7 @@ function showStatus(msg, color) {
   statusEl.style.display = 'inline';
 }
 
-// Fetch a fresh single-use CSRF token before every submission
-async function getCsrfToken() {
-  const res = await fetch('/api/csrf-token');
-  if (!res.ok) throw new Error('Failed to fetch CSRF token');
-  const { token } = await res.json();
-  return token;
-}
+// CSRF functionality removed as it is ineffective for public forms.
 
 form.addEventListener('submit', async function (e) {
   e.preventDefault();
@@ -35,14 +29,12 @@ form.addEventListener('submit', async function (e) {
   statusEl.style.display = 'none';
 
   try {
-    const csrfToken = await getCsrfToken();
     const website   = document.getElementById('website')?.value ?? '';
 
     const res = await fetch('/api/contact', {
       method:  'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-Token': csrfToken,
       },
       body: JSON.stringify({ name, email, subject, message, website }),
     });
