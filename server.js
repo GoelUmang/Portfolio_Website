@@ -5,8 +5,8 @@ const helmet      = require('helmet');
 const cors        = require('cors');
 const rateLimit   = require('express-rate-limit');
 const compression = require('compression');
-const nodemailer  = require('nodemailer');
 const path        = require('path');
+const { isOriginAllowed } = require('./lib/utils');
 
 const app  = express();
 app.set('trust proxy', 1);
@@ -40,9 +40,7 @@ app.use(helmet({
 app.use(compression());
 
 // ── CORS — same-origin only in production ────────────────────────────────────
-const allowedOrigins = isProd
-  ? [process.env.ORIGIN, 'https://www.goelumang.com', 'https://umang-goel.vercel.app'].filter(Boolean)
-  : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const localOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 app.use(cors({
   origin: (origin, cb) => {
@@ -50,7 +48,9 @@ app.use(cors({
       // In production, block non-browser requests (missing origin header)
       return isProd ? cb(new Error('Not allowed by CORS: Origin header missing')) : cb(null, true);
     }
-    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (isOriginAllowed(origin) || (!isProd && localOrigins.includes(origin))) {
+      return cb(null, true);
+    }
     cb(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST'],
@@ -95,79 +95,11 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
 });
 
-// ── Nodemailer transporter ───────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // STARTTLS
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// ── Views endpoint ───────────────────────────────────────────────────────────
+app.all('/api/views', require('./api/views'));
 
-app.post('/api/contact', contactLimiter, async (req, res) => {
-  const { name, email, subject, message } = req.body ?? {};
-
-  // Presence check
-  if (!name || !email || !message) {
-    return res.status(400).json({ error: 'name, email, and message are required.' });
-  }
-
-  // Type check — all must be strings
-  if ([name, email, message, subject].some(v => v !== undefined && typeof v !== 'string')) {
-    return res.status(400).json({ error: 'Invalid input.' });
-  }
-
-  // Email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Invalid email address.' });
-  }
-
-  // Length limits
-  if (
-    name.length    > 100 ||
-    email.length   > 254 ||
-    (subject && subject.length > 200) ||
-    message.length > 5000
-  ) {
-    return res.status(400).json({ error: 'Input exceeds maximum length.' });
-  }
-
-  // Honeypot field — bots fill this, humans don't
-  if (req.body.website) {
-    return res.json({ success: true, message: 'Message sent successfully.' });
-  }
-
-  const mailOptions = {
-    from:    `"Portfolio Contact" <${process.env.SMTP_USER}>`,
-    to:      process.env.CONTACT_TO || 'goelumangcareers@gmail.com',
-    replyTo: email,
-    subject: subject ? `[Portfolio] ${subject}` : `[Portfolio] New message from ${name}`,
-    text:    `Name: ${name}\nEmail: ${email}\n\n${message}`,
-    html: `
-      <div style="font-family:sans-serif;max-width:600px;margin:auto;">
-        <h2 style="color:#C8A84B;border-bottom:1px solid #C8A84B;padding-bottom:8px;">
-          New Portfolio Message
-        </h2>
-        <p><strong>Name:</strong> ${escapeHtml(name)}</p>
-        <p><strong>Email:</strong> <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></p>
-        ${subject ? `<p><strong>Subject:</strong> ${escapeHtml(subject)}</p>` : ''}
-        <hr style="border-color:#eee;"/>
-        <p style="white-space:pre-wrap;">${escapeHtml(message)}</p>
-      </div>
-    `,
-  };
-
-  try {
-    await transporter.sendMail(mailOptions);
-    return res.json({ success: true, message: 'Message sent successfully.' });
-  } catch (err) {
-    log('error', 'Email send error', err.message);
-    return res.status(500).json({ error: 'Failed to send message. Please try again later.' });
-  }
-});
+// ── Contact endpoint ─────────────────────────────────────────────────────────
+app.all('/api/contact', contactLimiter, require('./api/contact'));
 
 // ── Fallback → index.html ────────────────────────────────────────────────────
 app.get('*', (_req, res) => {
@@ -215,14 +147,7 @@ if (require.main === module) {
 
 module.exports = app;
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+
 
 function log(level, ...args) {
   const ts = new Date().toISOString();

@@ -1,13 +1,5 @@
-const nodemailer = require('nodemailer');
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+const transporter = require('../lib/mailer');
+const { isOriginAllowed, setCorsHeaders, setSecurityHeaders, escapeHtml } = require('../lib/utils');
 
 // ── In-memory rate limiter ───────────────────────────────────────────────────
 // NOTE: This resets on cold starts. For a portfolio contact form this provides
@@ -47,45 +39,7 @@ function isRateLimited(ip) {
 }
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
-const ALLOWED_ORIGINS = [
-  process.env.ORIGIN,                        // primary: https://goelumang.com
-  'https://www.goelumang.com',               // www variant
-  'https://umang-goel.vercel.app',           // Vercel preview URL
-].filter(Boolean);
 
-function isOriginAllowed(origin) {
-  if (!origin) return false;              // block requests with no Origin header
-  return ALLOWED_ORIGINS.includes(origin);
-}
-
-function setCorsHeaders(res, origin) {
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Max-Age', '86400');
-}
-
-// ── Security headers ─────────────────────────────────────────────────────────
-function setSecurityHeaders(res) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '0'); // modern best practice: rely on CSP
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-}
-
-// ── Nodemailer transporter ───────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  host:   process.env.SMTP_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
-
-// ── Handler ──────────────────────────────────────────────────────────────────
 module.exports = async (req, res) => {
   // Security headers on every response
   setSecurityHeaders(res);
@@ -119,9 +73,7 @@ module.exports = async (req, res) => {
   }
 
   // ── Rate limiting ───────────────────────────────────────────────────────
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
-          || req.socket?.remoteAddress
-          || 'unknown';
+  const ip = req.headers['x-vercel-forwarded-for'] || req.headers['x-real-ip'] || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
 
   if (isRateLimited(ip)) {
     res.setHeader('Retry-After', String(Math.ceil(RATE_LIMIT_WINDOW_MS / 1000)));
