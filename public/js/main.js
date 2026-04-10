@@ -10,8 +10,8 @@ const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').mat
   const bar   = document.getElementById('boot-bar');
   const lines = ['bl0', 'bl1', 'bl2', 'bl3', 'bl4'];
 
-  // Skip boot for returning visitors or reduced-motion preference
-  if (REDUCED_MOTION || sessionStorage.getItem('booted')) {
+  // Skip boot only if the device requests reduced-motion
+  if (REDUCED_MOTION) {
     boot.style.display = 'none';
     startSite();
     return;
@@ -39,7 +39,6 @@ const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').mat
     boot.classList.add('fade-out');
     setTimeout(() => {
       boot.style.display = 'none';
-      sessionStorage.setItem('booted', '1');
       if (destroyShader) destroyShader();
       startSite();
     }, 650);
