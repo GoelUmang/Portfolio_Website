@@ -8,7 +8,7 @@ const vertexShader = /* glsl */`
 
 // Concentric-ring shader — adapts the React component to vanilla Three.js
 const fragmentShader = /* glsl */`
-  precision highp float;
+  precision mediump float;
   uniform vec2  resolution;
   uniform float time;
 
@@ -49,8 +49,8 @@ export function initShaderLoader() {
   const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
   scene.add(new THREE.Mesh(geometry, material));
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+  renderer.setPixelRatio(1); // Force 1x pixel ratio for speed on mobile
 
   const resize = () => {
     const w = canvas.parentElement?.clientWidth  ?? window.innerWidth;
