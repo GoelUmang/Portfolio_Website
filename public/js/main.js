@@ -346,19 +346,4 @@ window.addEventListener('resize', () => {
 // ── Interactive 3D scene ─────────────────────────────────────────────────────
 initSplineScene();
 
-// ── Phone number — rendered via JS to avoid plain-text scraping ───────────────
-(function () {
-  const parts = ['623', '286', '8901'];
-  const num   = parts.join('-');
-  const tel   = 'tel:' + parts.join('');
-  // Hero section
-  const link  = document.getElementById('phone-link');
-  const label = document.getElementById('phone-display');
-  if (link)  { link.href = tel; }
-  if (label) { label.textContent = num; }
-  // Contact section
-  const cLink  = document.getElementById('contact-phone-link');
-  const cLabel = document.getElementById('contact-phone-display');
-  if (cLink)  { cLink.href = tel; }
-  if (cLabel) { cLabel.textContent = num; }
-})();
+
