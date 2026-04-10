@@ -3,7 +3,6 @@ import { Application } from '@splinetool/runtime';
 const SCENE_URL = 'https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode';
 
 export async function initSplineScene() {
-  if (window.innerWidth < 1024) return;
 
   const canvas = document.getElementById('spline-canvas');
   const hero   = document.getElementById('hero');
