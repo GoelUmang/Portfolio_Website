@@ -18,34 +18,46 @@ export async function initSplineScene() {
 
   let heroInView = true;
 
+  let glowRaf = null;
+  let mX = 0, mY = 0, sX = 0, sY = 0, dX = 0, dY = 0, pId = 0, pType = '', isPrim = false;
+
   document.addEventListener('pointermove', (e) => {
-    // Update CSS radial glow
-    if (glow && heroInView) {
-      const x = (e.clientX / window.innerWidth)  * 100;
-      const y = (e.clientY / window.innerHeight) * 100;
-      glow.style.setProperty('--mx', x + '%');
-      glow.style.setProperty('--my', y + '%');
-      glow.style.opacity = '1';
+    mX = e.clientX; mY = e.clientY;
+    sX = e.screenX; sY = e.screenY;
+    dX = e.movementX; dY = e.movementY;
+    pId = e.pointerId; pType = e.pointerType; isPrim = e.isPrimary;
+
+    if (!glowRaf) {
+      glowRaf = requestAnimationFrame(() => {
+        // Update CSS radial glow
+        if (glow && heroInView) {
+          const x = (mX / window.innerWidth)  * 100;
+          const y = (mY / window.innerHeight) * 100;
+          glow.style.setProperty('--mx', x + '%');
+          glow.style.setProperty('--my', y + '%');
+          glow.style.opacity = '1';
+        }
+
+        if (heroInView) {
+          // Spline's runtime (Three.js) listens for 'pointermove' on the canvas.
+          // Dispatch a synthetic PointerEvent so it fires natively
+          canvas.dispatchEvent(new PointerEvent('pointermove', {
+            clientX:    mX,
+            clientY:    mY,
+            screenX:    sX,
+            screenY:    sY,
+            movementX:  dX,
+            movementY:  dY,
+            pointerId:  pId,
+            pointerType: pType,
+            isPrimary:  isPrim,
+            bubbles:    false,
+            cancelable: false,
+          }));
+        }
+        glowRaf = null;
+      });
     }
-
-    if (!heroInView) return;
-
-    // Spline's runtime (Three.js) listens for 'pointermove' on the canvas.
-    // Dispatch a synthetic PointerEvent so it fires regardless of which
-    // element the real cursor is over.
-    canvas.dispatchEvent(new PointerEvent('pointermove', {
-      clientX:    e.clientX,
-      clientY:    e.clientY,
-      screenX:    e.screenX,
-      screenY:    e.screenY,
-      movementX:  e.movementX,
-      movementY:  e.movementY,
-      pointerId:  e.pointerId,
-      pointerType: e.pointerType,
-      isPrimary:  e.isPrimary,
-      bubbles:    false,
-      cancelable: false,
-    }));
   });
 
   document.documentElement.addEventListener('pointerleave', () => {
@@ -72,6 +84,7 @@ export async function initSplineScene() {
       loader.style.opacity    = '0';
       setTimeout(() => { loader.style.display = 'none'; }, 450);
     }
+    return true;
   } catch (err) {
     console.warn('[SplineScene] Failed to load:', err);
     if (loader) {
@@ -83,5 +96,6 @@ export async function initSplineScene() {
           </div>
         </div>`;
     }
+    return false;
   }
 }

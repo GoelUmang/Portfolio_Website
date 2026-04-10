@@ -299,17 +299,29 @@ if (!REDUCED_MOTION) {
 if (!REDUCED_MOTION) {
   document.querySelectorAll('.btn-primary, .btn-outline').forEach(btn => {
     let rect;
-    btn.addEventListener('mouseenter', () => { rect = btn.getBoundingClientRect(); });
+    let bRaf = null;
+    let cx = 0, cy = 0;
+
+    btn.addEventListener('mouseenter', () => { 
+      rect = btn.getBoundingClientRect(); 
+      cx = rect.left + rect.width  / 2;
+      cy = rect.top  + rect.height / 2;
+    });
     btn.addEventListener('mousemove', e => {
       if (!rect) return;
-      const cx = rect.left + rect.width  / 2;
-      const cy = rect.top  + rect.height / 2;
-      const dx = (e.clientX - cx) / (rect.width  / 2);
-      const dy = (e.clientY - cy) / (rect.height / 2);
-      btn.style.transform = `translate(${dx * 5}px, ${dy * 5}px)`;
+      const ex = e.clientX, ey = e.clientY;
+      if (!bRaf) {
+        bRaf = requestAnimationFrame(() => {
+          const dx = (ex - cx) / (rect.width  / 2);
+          const dy = (ey - cy) / (rect.height / 2);
+          btn.style.transform = `translate(${dx * 5}px, ${dy * 5}px)`;
+          bRaf = null;
+        });
+      }
     });
     btn.addEventListener('mouseleave', () => {
       rect = null;
+      if (bRaf) { cancelAnimationFrame(bRaf); bRaf = null; }
       btn.style.transform  = '';
       btn.style.transition = 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
       setTimeout(() => { btn.style.transition = ''; }, 400);
@@ -322,17 +334,26 @@ if (!REDUCED_MOTION) {
 if (!REDUCED_MOTION && window.matchMedia('(hover: hover)').matches) {
   document.querySelectorAll('.hud-card').forEach(card => {
     let rect;
+    let cRaf = null;
+
     card.addEventListener('mouseenter', () => { rect = card.getBoundingClientRect(); });
     card.addEventListener('mousemove', e => {
       if (!rect) return;
-      const x     = (e.clientX - rect.left) / rect.width  - 0.5;
-      const y     = (e.clientY - rect.top)  / rect.height - 0.5;
-      const tiltX =  y * 6;
-      const tiltY = -x * 6;
-      card.style.transform = `perspective(600px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-3px)`;
+      const ex = e.clientX, ey = e.clientY;
+      if (!cRaf) {
+        cRaf = requestAnimationFrame(() => {
+          const x     = (ex - rect.left) / rect.width  - 0.5;
+          const y     = (ey - rect.top)  / rect.height - 0.5;
+          const tiltX =  y * 6;
+          const tiltY = -x * 6;
+          card.style.transform = `perspective(600px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-3px)`;
+          cRaf = null;
+        });
+      }
     });
     card.addEventListener('mouseleave', () => {
       rect = null;
+      if (cRaf) { cancelAnimationFrame(cRaf); cRaf = null; }
       card.style.transition = 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease';
       card.style.transform  = '';
       setTimeout(() => { card.style.transition = ''; }, 500);
@@ -365,7 +386,14 @@ window.addEventListener('resize', () => {
 }, { passive: true });
 
 // ── Interactive 3D scene ──────────────────────────────────────────────────────
-initSplineScene();
+initSplineScene().then((success) => {
+  if (success && heroCanvas) {
+    // If Spline loaded successfully, kill the background particle network to save GPU processing
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    heroCanvas.style.display = 'none';
+    particles = [];
+  }
+});
 
 // ── Fetch View Metrics ────────────────────────────────────────────────────────
 fetch('/api/views')
