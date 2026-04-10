@@ -8,6 +8,11 @@ const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabase
 
 module.exports = async (req, res) => {
   setSecurityHeaders(res);
+  // Prevent browser from implicitly caching the metric
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  
   const origin = req.headers.origin;
 
   if (req.method === 'OPTIONS') {
@@ -38,10 +43,13 @@ module.exports = async (req, res) => {
     const ipHash = crypto.createHash('sha256').update(salt + rawIp).digest('hex');
     const today = new Date().toISOString().split('T')[0];
 
-    await supabase.from('site_views').upsert(
+    const { error: upsertError } = await supabase.from('site_views').upsert(
       { ip_hash: ipHash, visited_date: today },
       { onConflict: 'ip_hash, visited_date', ignoreDuplicates: true }
     );
+    if (upsertError) {
+      console.error('Supabase Upsert Error:', upsertError);
+    }
 
     const { data, error } = await supabase.rpc('get_view_metrics');
     if (error) throw error;
