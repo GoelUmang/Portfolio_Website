@@ -45,8 +45,8 @@ const localOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) {
-      // In production, block non-browser requests (missing origin header)
-      return isProd ? cb(new Error('Not allowed by CORS: Origin header missing')) : cb(null, true);
+      // Allow requests with no origin (like same-origin GET requests or direct server hits)
+      return cb(null, true);
     }
     if (isOriginAllowed(origin) || (!isProd && localOrigins.includes(origin))) {
       return cb(null, true);

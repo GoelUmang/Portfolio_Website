@@ -45,7 +45,7 @@ module.exports = async (req, res) => {
 
     const { error: upsertError } = await supabase.from('site_views').upsert(
       { ip_hash: ipHash, visited_date: today },
-      { onConflict: 'ip_hash, visited_date', ignoreDuplicates: true }
+      { onConflict: 'ip_hash,visited_date', ignoreDuplicates: true }
     );
     if (upsertError) {
       console.error('Supabase Upsert Error:', upsertError);
