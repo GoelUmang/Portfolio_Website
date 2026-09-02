@@ -49,15 +49,17 @@ body {
 /* ── Scanning Line ──────────────────────────────────────────── */
 .scan-line {
   position: fixed;
+  top: 0;
   left: 0; right: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent 0%, var(--cyan) 40%, var(--cyan) 60%, transparent 100%);
   opacity: 0.10;
   z-index: 9999;
   pointer-events: none;
+  will-change: transform;
   animation: scanMove 12s linear infinite;
 }
-@keyframes scanMove { 0% { top: -1px; } 100% { top: 100vh; } }
+@keyframes scanMove { 0% { transform: translateY(-1px); } 100% { transform: translateY(100vh); } }
 
 /* ── Gradient text ──────────────────────────────────────────── */
 .gradient-text {

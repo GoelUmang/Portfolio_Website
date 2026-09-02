@@ -49,7 +49,7 @@ const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').mat
 function startSite() {
   const roleEl = document.getElementById('hero-role');
   if (!roleEl) return;
-  const roles = ['Software Engineer', 'Systems Developer', 'Backend Engineer'];
+  const roles = ['Backend & Database Engineer', 'Software Engineer', 'Distributed Systems Developer', 'Cloud & ETL Engineer'];
   let ri = 0, ci = 0, deleting = false;
 
   function typeStep() {
@@ -124,24 +124,30 @@ document.querySelectorAll('.reveal, .reveal-left, .reveal-scale').forEach(el => 
 const heroCanvas = document.getElementById('hero-canvas');
 const ctx        = heroCanvas?.getContext('2d');
 let particles = [], rafId;
+let _canvasW = 0, _canvasH = 0;
 
 function resizeCanvas() {
   const hero = document.getElementById('hero');
   if (!hero || !heroCanvas) return;
   const dpr = window.devicePixelRatio || 1;
-  const w   = hero.offsetWidth;
-  const h   = hero.offsetHeight;
-  heroCanvas.width  = w * dpr;
-  heroCanvas.height = h * dpr;
-  heroCanvas.style.width  = w + 'px';
-  heroCanvas.style.height = h + 'px';
+  _canvasW = hero.offsetWidth;
+  _canvasH = hero.offsetHeight;
+  heroCanvas.width  = _canvasW * dpr;
+  heroCanvas.height = _canvasH * dpr;
+  heroCanvas.style.width  = _canvasW + 'px';
+  heroCanvas.style.height = _canvasH + 'px';
   ctx.scale(dpr, dpr);
 }
 
+const _ALPHA_BUCKETS = 4;
+const _alphaBufs = Array.from({length: _ALPHA_BUCKETS}, () => new Float32Array(300));
+const _alphaLens = new Int32Array(_ALPHA_BUCKETS);
+
 class Particle {
   constructor() { this.reset(true); }
-  reset(init) {
-    const w = heroCanvas.offsetWidth, h = heroCanvas.offsetHeight;
+  reset(init, w, h) {
+    w = w || heroCanvas?.offsetWidth || window.innerWidth;
+    h = h || heroCanvas?.offsetHeight || window.innerHeight;
     this.x  = Math.random() * w;
     const edgeY = Math.random() > 0.5 ? 0 : h;
     this.y  = init ? Math.random() * h : edgeY;
@@ -149,16 +155,37 @@ class Particle {
     this.vy = (Math.random() - 0.5) * 0.35;
     this.r  = Math.random() * 1.2 + 0.4;
     this.a  = Math.random() * 0.35 + 0.08;
+    this.ab = Math.min(((this.a - 0.08) / 0.35 * _ALPHA_BUCKETS) | 0, _ALPHA_BUCKETS - 1);
   }
-  update() {
-    const w = heroCanvas.offsetWidth, h = heroCanvas.offsetHeight;
+  update(w, h) {
+    w = w || heroCanvas.offsetWidth;
+    h = h || heroCanvas.offsetHeight;
     this.x += this.vx; this.y += this.vy;
-    if (this.x < -10 || this.x > w + 10 || this.y < -10 || this.y > h + 10) this.reset(false);
+    if (this.x < -10 || this.x > w + 10 || this.y < -10 || this.y > h + 10) this.reset(false, w, h);
   }
-  draw() {
+}
+
+function drawParticles() {
+  _alphaLens.fill(0);
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    const b = p.ab;
+    const k = _alphaLens[b];
+    _alphaBufs[b][k]     = p.x;
+    _alphaBufs[b][k + 1] = p.y;
+    _alphaBufs[b][k + 2] = p.r;
+    _alphaLens[b] += 3;
+  }
+  for (let b = 0; b < _ALPHA_BUCKETS; b++) {
+    const len = _alphaLens[b];
+    if (!len) continue;
+    ctx.fillStyle = `rgba(255,255,255,${(0.08 + (b + 0.5) / _ALPHA_BUCKETS * 0.35).toFixed(3)})`;
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,255,255,${this.a})`;
+    const buf = _alphaBufs[b];
+    for (let k = 0; k < len; k += 3) {
+      ctx.moveTo(buf[k] + buf[k + 2], buf[k + 1]);
+      ctx.arc(buf[k], buf[k + 1], buf[k + 2], 0, Math.PI * 2);
+    }
     ctx.fill();
   }
 }
@@ -170,28 +197,55 @@ function initParticles() {
   for (let i = 0; i < n; i++) particles.push(new Particle());
 }
 
+const _LINE_BUCKETS = 5;
+const _lineBufs = Array.from({length: _LINE_BUCKETS}, () => new Float32Array(4000));
+const _lineLens = new Int32Array(_LINE_BUCKETS);
+
 function drawLines() {
-  const D = 140;
+  const D2 = 140 * 140;
+  _lineLens.fill(0);
+
   for (let i = 0; i < particles.length; i++) {
+    const pi = particles[i];
     for (let j = i + 1; j < particles.length; j++) {
-      const dx = particles[i].x - particles[j].x;
-      const dy = particles[i].y - particles[j].y;
-      const d  = Math.sqrt(dx * dx + dy * dy);
-      if (d < D) {
-        ctx.beginPath();
-        ctx.moveTo(particles[i].x, particles[i].y);
-        ctx.lineTo(particles[j].x, particles[j].y);
-        ctx.strokeStyle = `rgba(255,255,255,${(1 - d / D) * 0.1})`;
-        ctx.lineWidth   = 0.5;
-        ctx.stroke();
+      const pj = particles[j];
+      const dx = pi.x - pj.x;
+      const dy = pi.y - pj.y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < D2) {
+        const b = (((D2 - dSq) / D2) * _LINE_BUCKETS) | 0;
+        const bi = b < _LINE_BUCKETS ? b : _LINE_BUCKETS - 1;
+        const k = _lineLens[bi];
+        if (k + 4 <= _lineBufs[bi].length) {
+          _lineBufs[bi][k]     = pi.x;
+          _lineBufs[bi][k + 1] = pi.y;
+          _lineBufs[bi][k + 2] = pj.x;
+          _lineBufs[bi][k + 3] = pj.y;
+          _lineLens[bi] += 4;
+        }
       }
     }
+  }
+
+  ctx.lineWidth = 0.5;
+  for (let b = 0; b < _LINE_BUCKETS; b++) {
+    const len = _lineLens[b];
+    if (!len) continue;
+    ctx.strokeStyle = `rgba(255,255,255,${((b + 1) / _LINE_BUCKETS) * 0.1})`;
+    ctx.beginPath();
+    const buf = _lineBufs[b];
+    for (let k = 0; k < len; k += 4) {
+      ctx.moveTo(buf[k], buf[k + 1]);
+      ctx.lineTo(buf[k + 2], buf[k + 3]);
+    }
+    ctx.stroke();
   }
 }
 
 function animate() {
-  ctx.clearRect(0, 0, heroCanvas.offsetWidth, heroCanvas.offsetHeight);
-  particles.forEach(p => { p.update(); p.draw(); });
+  ctx.clearRect(0, 0, _canvasW, _canvasH);
+  for (let i = 0; i < particles.length; i++) particles[i].update(_canvasW, _canvasH);
+  drawParticles();
   drawLines();
   rafId = requestAnimationFrame(animate);
 }

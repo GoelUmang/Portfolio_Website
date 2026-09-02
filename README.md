@@ -1,12 +1,12 @@
 <p align="center">
   <strong>UMANG GOEL</strong><br>
-  <em>Software Engineer · Systems · Backend · Data</em>
+  <em>Backend &amp; Database Engineer · Distributed Systems · Cloud &amp; ETL</em>
 </p>
 
 <p align="center">
   <a href="https://goelumang.com">🌐 Live Site</a> ·
   <a href="https://www.linkedin.com/in/GoelUmang/">LinkedIn</a> ·
-  <a href="mailto:goelumangcareers@gmail.com">Email</a> ·
+  <a href="mailto:goelumangjob@gmail.com">Email</a> ·
   <a href="https://github.com/GoelUmang">GitHub</a>
 </p>
 

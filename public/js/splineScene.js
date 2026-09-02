@@ -17,6 +17,7 @@ export async function initSplineScene() {
   canvas.style.pointerEvents = 'none';
 
   let heroInView = true;
+  let splineApp  = null;
 
   let glowRaf = null;
   let mX = 0, mY = 0, sX = 0, sY = 0, dX = 0, dY = 0, pId = 0, pType = '', isPrim = false;
@@ -64,20 +65,39 @@ export async function initSplineScene() {
     if (glow) glow.style.opacity = '0';
   });
 
-  // Disable forwarding when hero is scrolled out of view
+  // Pause/resume Spline render loop based on hero visibility
   const observer = new IntersectionObserver(
     (entries) => {
       heroInView = entries[0].isIntersecting;
       if (glow) glow.style.opacity = heroInView ? '1' : '0';
       if (hud)  hud.style.opacity  = heroInView ? '1' : '0';
+      if (splineApp) {
+        if (heroInView) splineApp.start?.();
+        else            splineApp.stop?.();
+      }
     },
     { threshold: 0.05 }
   );
   observer.observe(hero);
 
+  // Pause render loop when browser tab is hidden
+  document.addEventListener('visibilitychange', () => {
+    if (!splineApp) return;
+    if (document.hidden) splineApp.stop?.();
+    else if (heroInView) splineApp.start?.();
+  });
+
   try {
     const app = new Application(canvas);
     await app.load(SCENE_URL);
+    splineApp = app;
+
+    // Cap pixel ratio — on Retina (dpr=2) the renderer otherwise works at 4× pixels.
+    // Capping to 1.5 cuts GPU load by ~44% with imperceptible quality difference.
+    const renderer = app._renderer ?? app.renderer;
+    if (renderer?.setPixelRatio) {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    }
 
     if (loader) {
       loader.style.transition = 'opacity 0.4s ease';

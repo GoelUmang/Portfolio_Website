@@ -22,12 +22,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'", 'https://esm.sh'],
+      scriptSrc:      ["'self'", "'unsafe-inline'", 'https://esm.sh', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
       styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
       imgSrc:         ["'self'", 'data:', 'blob:', 'https://prod.spline.design'],
-      connectSrc:     ["'self'", 'https://cdn.jsdelivr.net', 'https://esm.sh', 'https://prod.spline.design'],
-      workerSrc:      ["'self'", 'blob:', 'https://esm.sh'],
+      connectSrc:     ["'self'", 'https://cdn.jsdelivr.net', 'https://esm.sh', 'https://unpkg.com', 'https://prod.spline.design'],
+      workerSrc:      ["'self'", 'blob:', 'https://esm.sh', 'https://unpkg.com', 'https://cdn.jsdelivr.net'],
       frameSrc:       ["'none'"],
       objectSrc:      ["'none'"],
       ...(isProd ? { upgradeInsecureRequests: [] } : {}),
@@ -121,6 +121,11 @@ if (require.main === module) {
   const HOST = isProd ? '0.0.0.0' : '127.0.0.1';
   const server = app.listen(PORT, HOST, () => {
     log('info', `Portfolio server running → http://localhost:${PORT} [${isProd ? 'production' : 'development'}]`);
+    
+    // Automatically open the browser in development
+    if (!isProd) {
+      require('child_process').exec(`open http://localhost:${PORT}`);
+    }
   });
 
   server.on('error', err => {
